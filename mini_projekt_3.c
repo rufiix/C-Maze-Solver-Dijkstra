@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
-#include <limits.h> // For INT_MAX
+#include <limits.h>
 
 // --- Constants and Type Definitions ---
 
@@ -35,6 +35,20 @@ typedef struct {
     Node** adj_lists;
 } Graph;
 
+// --- Min-Heap Structures for Dijkstra ---
+
+typedef struct {
+    int vertex;
+    int distance;
+} HeapNode;
+
+typedef struct {
+    int size;
+    int capacity;
+    int* pos;
+    HeapNode* array;
+} MinHeap;
+
 // --- Function Prototypes ---
 
 // Maze functions
@@ -50,10 +64,17 @@ void free_graph(Graph* graph);
 void add_edge(Graph* graph, int src, int dest);
 Graph* maze_to_graph(const Maze* maze);
 
+// Min-Heap functions
+MinHeap* create_min_heap(int capacity);
+void free_min_heap(MinHeap* heap);
+HeapNode extract_min(MinHeap* heap);
+void decrease_key(MinHeap* heap, int v, int dist);
+int is_in_heap(MinHeap* heap, int v);
+void min_heapify(MinHeap* heap, int idx);
+
 // Solver (Dijkstra) functions
 int solve_with_dijkstra(Graph* graph, int start_node, int end_node, int** prev_path);
 void reconstruct_and_mark_path(Maze* maze, int start_node, int* prev_path);
-
 
 // --- Main Application Logic ---
 
@@ -74,7 +95,7 @@ int main() {
     }
 
     if (width < 5 || height < 5 || width % 2 == 0 || height % 2 == 0) {
-        printf("Error: Dimensions must be odd integers greater than or equal to 5.\n");
+        printf("Error: Dimensions must be odd integers >= 5.\n");
         return EXIT_FAILURE;
     }
 
@@ -83,7 +104,7 @@ int main() {
         perror("Failed to create maze");
         return EXIT_FAILURE;
     }
-    
+
     Point generation_start = {1, 1};
     generate_maze_recursive(maze, generation_start);
 
@@ -95,7 +116,7 @@ int main() {
 
     maze->grid[maze->start.y][maze->start.x] = START_CHAR;
     maze->grid[maze->end.y][maze->end.x] = END_CHAR;
-    
+
     printf("\nGenerated Maze:\n");
     print_maze(maze);
 
@@ -120,8 +141,7 @@ int main() {
     return EXIT_SUCCESS;
 }
 
-
-// --- Function Implementations ---
+// --- Maze Implementation ---
 
 Maze* create_maze(int width, int height) {
     Maze* maze = malloc(sizeof(Maze));
@@ -135,12 +155,6 @@ Maze* create_maze(int width, int height) {
     }
     for (int i = 0; i < height; ++i) {
         maze->grid[i] = malloc(width * sizeof(char));
-        if (!maze->grid[i]) {
-            for (int j = 0; j < i; ++j) free(maze->grid[j]);
-            free(maze->grid);
-            free(maze);
-            return NULL;
-        }
         memset(maze->grid[i], WALL_CHAR, width);
     }
     return maze;
@@ -160,9 +174,9 @@ void generate_maze_recursive(Maze* maze, Point p) {
     int directions[] = {0, 1, 2, 3};
     for (int i = 0; i < 4; ++i) {
         int r = rand() % 4;
-        int temp = directions[i];
+        int tmp = directions[i];
         directions[i] = directions[r];
-        directions[r] = temp;
+        directions[r] = tmp;
     }
     int dx[] = {0, 0, 2, -2};
     int dy[] = {-2, 2, 0, 0};
@@ -170,7 +184,7 @@ void generate_maze_recursive(Maze* maze, Point p) {
         int nx = p.x + dx[directions[i]];
         int ny = p.y + dy[directions[i]];
         if (is_valid(nx, ny, maze->width, maze->height) && maze->grid[ny][nx] == WALL_CHAR) {
-            maze->grid[ny - dy[directions[i]] / 2][nx - dx[directions[i]] / 2] = PATH_CHAR;
+            maze->grid[p.y + dy[directions[i]] / 2][p.x + dx[directions[i]] / 2] = PATH_CHAR;
             generate_maze_recursive(maze, (Point){nx, ny});
         }
     }
@@ -189,6 +203,8 @@ int is_valid(int x, int y, int width, int height) {
     return x >= 0 && x < width && y >= 0 && y < height;
 }
 
+// --- Graph Implementation ---
+
 Graph* create_graph(int num_vertices) {
     Graph* graph = malloc(sizeof(Graph));
     graph->num_vertices = num_vertices;
@@ -200,12 +216,11 @@ Graph* create_graph(int num_vertices) {
 }
 
 void free_graph(Graph* graph) {
-    if (!graph) return;
     for (int i = 0; i < graph->num_vertices; i++) {
-        Node* current = graph->adj_lists[i];
-        while (current) {
-            Node* temp = current;
-            current = current->next;
+        Node* curr = graph->adj_lists[i];
+        while (curr) {
+            Node* temp = curr;
+            curr = curr->next;
             free(temp);
         }
     }
@@ -218,6 +233,7 @@ void add_edge(Graph* graph, int src, int dest) {
     newNode->vertex = dest;
     newNode->next = graph->adj_lists[src];
     graph->adj_lists[src] = newNode;
+
     newNode = malloc(sizeof(Node));
     newNode->vertex = src;
     newNode->next = graph->adj_lists[dest];
@@ -233,14 +249,12 @@ Graph* maze_to_graph(const Maze* maze) {
                 int u = y * maze->width + x;
                 int dx[] = {0, 0, 1, -1};
                 int dy[] = {1, -1, 0, 0};
-                for(int i = 0; i < 4; ++i) {
+                for (int i = 0; i < 4; ++i) {
                     int nx = x + dx[i];
                     int ny = y + dy[i];
                     if (is_valid(nx, ny, maze->width, maze->height) && maze->grid[ny][nx] != WALL_CHAR) {
                         int v = ny * maze->width + nx;
-                        if (u < v) {
-                           add_edge(graph, u, v);
-                        }
+                        if (u < v) add_edge(graph, u, v);
                     }
                 }
             }
@@ -249,59 +263,134 @@ Graph* maze_to_graph(const Maze* maze) {
     return graph;
 }
 
-// Helper function to find the vertex with the minimum distance value,
-// from the set of vertices not yet included in the shortest path tree.
-int find_min_distance_vertex(int* distance, int* visited, int num_vertices) {
-    int min = INT_MAX, min_index = -1;
-    for (int v = 0; v < num_vertices; v++) {
-        if (visited[v] == 0 && distance[v] <= min) {
-            min = distance[v];
-            min_index = v;
-        }
-    }
-    return min_index;
+// --- Min-Heap Implementation ---
+
+MinHeap* create_min_heap(int capacity) {
+    MinHeap* heap = malloc(sizeof(MinHeap));
+    heap->pos = malloc(capacity * sizeof(int));
+    heap->size = 0;
+    heap->capacity = capacity;
+    heap->array = malloc(capacity * sizeof(HeapNode));
+    return heap;
 }
 
-// Solves the maze using Dijkstra's algorithm
+void free_min_heap(MinHeap* heap) {
+    free(heap->pos);
+    free(heap->array);
+    free(heap);
+}
+
+void swap_heap_node(HeapNode* a, HeapNode* b) {
+    HeapNode temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void min_heapify(MinHeap* heap, int idx) {
+    int smallest = idx;
+    int left = 2 * idx + 1;
+    int right = 2 * idx + 2;
+
+    if (left < heap->size &&
+        heap->array[left].distance < heap->array[smallest].distance)
+        smallest = left;
+
+    if (right < heap->size &&
+        heap->array[right].distance < heap->array[smallest].distance)
+        smallest = right;
+
+    if (smallest != idx) {
+        HeapNode smallestNode = heap->array[smallest];
+        HeapNode idxNode = heap->array[idx];
+
+        heap->pos[smallestNode.vertex] = idx;
+        heap->pos[idxNode.vertex] = smallest;
+
+        swap_heap_node(&heap->array[smallest], &heap->array[idx]);
+        min_heapify(heap, smallest);
+    }
+}
+
+HeapNode extract_min(MinHeap* heap) {
+    if (heap->size == 0) {
+        HeapNode dummy = {-1, INT_MAX};
+        return dummy;
+    }
+
+    HeapNode root = heap->array[0];
+    HeapNode lastNode = heap->array[heap->size - 1];
+    heap->array[0] = lastNode;
+
+    heap->pos[root.vertex] = heap->size - 1;
+    heap->pos[lastNode.vertex] = 0;
+
+    heap->size--;
+    min_heapify(heap, 0);
+
+    return root;
+}
+
+void decrease_key(MinHeap* heap, int v, int dist) {
+    int i = heap->pos[v];
+    heap->array[i].distance = dist;
+
+    while (i > 0 && heap->array[i].distance < heap->array[(i - 1) / 2].distance) {
+        heap->pos[heap->array[i].vertex] = (i - 1) / 2;
+        heap->pos[heap->array[(i - 1) / 2].vertex] = i;
+        swap_heap_node(&heap->array[i], &heap->array[(i - 1) / 2]);
+        i = (i - 1) / 2;
+    }
+}
+
+int is_in_heap(MinHeap* heap, int v) {
+    return heap->pos[v] < heap->size;
+}
+
+// --- Dijkstra with Min-Heap ---
+
 int solve_with_dijkstra(Graph* graph, int start_node, int end_node, int** prev_path) {
     int V = graph->num_vertices;
     int* distance = malloc(V * sizeof(int));
-    int* visited = malloc(V * sizeof(int));
     *prev_path = malloc(V * sizeof(int));
 
-    for (int i = 0; i < V; ++i) {
-        distance[i] = INT_MAX;
-        visited[i] = 0; // 0 means not visited
-        (*prev_path)[i] = -1;
+    MinHeap* heap = create_min_heap(V);
+
+    for (int v = 0; v < V; v++) {
+        distance[v] = INT_MAX;
+        (*prev_path)[v] = -1;
+        heap->array[v].vertex = v;
+        heap->array[v].distance = INT_MAX;
+        heap->pos[v] = v;
     }
 
     distance[start_node] = 0;
+    heap->array[start_node].distance = 0;
+    heap->size = V;
 
-    for (int count = 0; count < V - 1; count++) {
-        int u = find_min_distance_vertex(distance, visited, V);
-        if (u == -1 || u == end_node) {
-            break;
-        }
-        
-        visited[u] = 1;
+    while (heap->size > 0) {
+        HeapNode minNode = extract_min(heap);
+        int u = minNode.vertex;
+
+        if (u == end_node) break;
 
         Node* temp = graph->adj_lists[u];
         while (temp) {
             int v = temp->vertex;
-            // Edge weight is always 1 in our maze
-            if (!visited[v] && distance[u] != INT_MAX && distance[u] + 1 < distance[v]) {
+            if (is_in_heap(heap, v) && distance[u] != INT_MAX &&
+                distance[u] + 1 < distance[v]) {
                 distance[v] = distance[u] + 1;
                 (*prev_path)[v] = u;
+                decrease_key(heap, v, distance[v]);
             }
             temp = temp->next;
         }
     }
 
     int path_found = (distance[end_node] != INT_MAX);
-    
+
     free(distance);
-    free(visited);
-    
+    free_min_heap(heap);
+
     return path_found;
 }
 
