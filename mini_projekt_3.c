@@ -1,302 +1,398 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<time.h>
-#define WALL '#' // znak oznaczający ścianę
-#define PATH '.' // znak oznaczający ścieżkę
-#define START 'S' // znak oznaczający start
-#define END 'E' // znak oznaczający koniec
-#define MARK '*' // znak oznaczający znacznik
-typedef struct point{ // struktura przechowująca współrzędne punktu
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <limits.h> // For INT_MAX
+
+// --- Constants and Type Definitions ---
+
+#define WALL_CHAR '#'
+#define PATH_CHAR '.'
+#define START_CHAR 'S'
+#define END_CHAR 'E'
+#define SOLUTION_CHAR '*'
+
+// A simple structure for a 2D point
+typedef struct {
     int x;
     int y;
-    
-}
-point;
-point start; // zmienna przechowująca punkt startowy
-point end; // zmienna przechowująca punkt końcowy
-int is_valid(int x,int y,int width,int height){ // funkcja sprawdzająca, czy punkt jest w granicach labiryntu
-    return x>=0&&x<width&&y>=0&&y<height;
-    
-}
-    int count_wall_neighbors(char**maze,point p,int width,int height){ // funkcja licząca liczbę sąsiadów będących ścianami dla danego punktu
-        int count=0;
-        int dx[]={-1,0,1,0}; // tablica przechowująca przesunięcia w osi x
-        int dy[]={0,-1,0,1}; // tablica przechowująca przesunięcia w osi y
-        for(int i=0;i<4;i++){ // pętla po czterech kierunkach
-            int nx=p.x+dx[i]; // nowa współrzędna x
-            int ny=p.y+dy[i]; // nowa współrzędna y
-            if(is_valid(nx,ny,width,height)&&maze[ny][nx]==WALL){ // jeśli punkt jest w granicach i jest ścianą
-                count++; // zwiększ licznik
-            
-        }
-        }
-        return count;} // zwróć liczbę sąsiadów będących ścianami
-        void generate_maze(char**maze,point p,int width,int height){ // funkcja generująca labirynt za pomocą algorytmu DFS
-            maze[p.y][p.x]=PATH; // oznacz punkt jako ścieżkę
-            int order[]={0,1,2,3}; // tablica przechowująca kolejność odwiedzania sąsiadów
-            for(int i=0;i<4;i++){ // pętla losująca kolejność
-                int j=rand()%4; // losowy indeks
-                int temp=order[i]; // zamiana miejscami
-                order[i]=order[j];
-                order[j]=temp;
-                
-            }
-            int dx[]={-1,0,1,0}; // tablica przechowująca przesunięcia w osi x
-            int dy[]={0,-1,0,1}; // tablica przechowująca przesunięcia w osi y
-            for(int i=0;i<4;i++){ // pętla po czterech kierunkach
-                int nx=p.x+dx[order[i]]; // nowa współrzędna x
-                int ny=p.y+dy[order[i]]; // nowa współrzędna y
-                point np={nx,ny}; // nowy punkt
-                if(is_valid(nx,ny,width,height)&&count_wall_neighbors(maze,np,width,height)>=3){ // jeśli punkt jest w granicach i ma co najmniej trzech sąsiadów będących ścianami
-                    generate_maze(maze,np,width,height); // rekurencyjnie odwiedź punkt
-                    
-                }
-                
-            }
-            
-        } // zakończ funkcję
+} Point;
 
-       void print_maze(char**maze,int width,int height){ // funkcja wyświetlająca labirynt na ekranie
-            for(int y=0;y<height;y++){ // pętla po wierszach
-                for(int x=0;x<width;x++){ // pętla po kolumnach
-                    printf("%c ",maze[y][x]); // wydrukuj znak
-                    
-                }
-                printf("\n"); // przejdź do nowej linii
-                
-            }
-            
-        }
-        void free_maze(char**maze,int height){ // funkcja zwalniająca pamięć labiryntu
-            for(int y=0;y<height;y++){ // pętla po wierszach
-                free(maze[y]); // zwolnij pamięć wiersza
-                
-            }
-            free(maze); // zwolnij pamięć tablicy
-            
-        }
-typedef struct node { // struktura przechowująca węzeł listy sąsiedztwa
-    int x; // współrzędna x węzła
-    int y; // współrzędna y węzła
-    struct node* next; // wskaźnik na następny węzeł w liście
-    
-} node;
-typedef struct graph { // struktura przechowująca graf
-    int V; // liczba wierzchołków
-    node** adj; // tablica list sąsiedztwa
-    
-} graph;
-graph* create_graph(int V) { // funkcja tworząca graf
-    graph* g = (graph*)malloc(sizeof(graph)); // alokacja pamięci dla grafu
-    g->V = V; // ustawienie liczby wierzchołków
-    g->adj = (node**)malloc(V * sizeof(node*)); // alokacja pamięci dla tablicy list sąsiedztwa
-    for (int i = 0; i < V; i++) { // pętla po wierzchołkach
-        g->adj[i] = NULL; // ustawienie listy sąsiedztwa na pustą
-        
-    }
-    return g; // zwrócenie grafu
-    
-}
-void add_edge(graph* g, int u, int v) { // funkcja dodająca krawędź skierowaną od wierzchołka u do wierzchołka v
-    node* new_node = (node*)malloc(sizeof(node)); // alokacja pamięci dla nowego węzła
-    new_node->x = v / g->V; // obliczenie współrzędnej x węzła
-    new_node->y = v % g->V; // obliczenie współrzędnej y węzła
-    new_node->next = g->adj[u]; // ustawienie wskaźnika na następny węzeł na głowę listy sąsiedztwa u
-    g->adj[u] = new_node; // ustawienie nowego węzła na głowę listy sąsiedztwa u
-    
-} // zakończ funkcję
+// A structure to hold all maze-related data
+typedef struct {
+    char** grid;
+    int width;
+    int height;
+    Point start;
+    Point end;
+} Maze;
 
-graph* generate_graph(char** maze, int width, int height) { // funkcja tworząca graf na podstawie labiryntu
-    graph* g = create_graph(width * height); // utworzenie grafu o liczbie wierzchołków równej iloczynowi szerokości i wysokości labiryntu
-    for (int i = 0; i < height; i++) { // pętla po wierszach labiryntu
-        for (int j = 0; j < width; j++) { // pętla po kolumnach labiryntu
-            if (maze[i][j] == PATH || maze[i][j] == START || maze[i][j] == END) { // jeśli komórka labiryntu jest ścieżką, startem lub końcem
-                int u = i * width + j; // obliczenie indeksu wierzchołka odpowiadającego komórce
-                if (i > 0 && (maze[i-1][j] == PATH || maze[i-1][j] == START || maze[i-1][j] == END)) { // jeśli komórka nad jest ścieżką, startem lub końcem
-                    int v = (i-1) * width + j; // obliczenie indeksu wierzchołka odpowiadającego komórce nad
-                    add_edge(g, u, v); // dodanie krawędzi od u do v
-                    
-                }
-                if (i < height - 1 && (maze[i+1][j] == PATH || maze[i+1][j] == START || maze[i+1][j] == END)) { // jeśli komórka pod jest ścieżką, startem lub końcem
-                    int v = (i+1) * width + j; // obliczenie indeksu wierzchołka odpowiadającego komórce pod
-                    add_edge(g, u, v); // dodanie krawędzi od u do v
-                    
-                }
-                if (j > 0 && (maze[i][j-1] == PATH || maze[i][j-1] == START || maze[i][j-1] == END)) { // jeśli komórka po lewej jest ścieżką, startem lub końcem
-                    int v = i * width + (j-1); // obliczenie indeksu wierzchołka odpowiadającego komórce po lewej
-                    add_edge(g, u, v); // dodanie krawędzi od u do v
-                    
-                }
-                if (j < width - 1 && (maze[i][j+1] == PATH || maze[i][j+1] == START || maze[i][j+1] == END)) { // jeśli komórka po prawej jest ścieżką, startem lub końcem
-                    int v = i * width + (j+1); // obliczenie indeksu wierzchołka odpowiadającego komórce po prawej
-                    add_edge(g, u, v); // dodanie krawędzi od u do v
-                    
-                }
-                
-            }
-            
-        }
-        
-    }
-    return g; // zwrócenie grafu
-    
-}
-int* visited; // tablica przechowująca informację, czy wierzchołek został odwiedzony
-int* dist; // tablica przechowująca odległość od wierzchołka startowego
-int* prev; // tablica przechowująca poprzednika wierzchołka na najkrótszej ścieżce
-void init_arrays(int V) { // funkcja inicjalizująca tablice
-    visited = (int*)malloc(V * sizeof(int)); // alokacja pamięci dla tablicy visited
-    dist = (int*)malloc(V * sizeof(int)); // alokacja pamięci dla tablicy dist
-    prev = (int*)malloc(V * sizeof(int)); // alokacja pamięci dla tablicy prev
-    for (int i = 0; i < V; i++) { // pętla po wierzchołkach
-        visited[i] = 0; // ustawienie wartości na 0 (nieodwiedzony)
-        dist[i] = 999; // ustawienie wartości na 999 (nieskończoność)
-        prev[i] = -1; // ustawienie wartości na -1 (brak poprzednika)
-        
-    }
-    
-}
-int find_min(int V) { // funkcja znajdująca nieodwiedzony wierzchołek o najmniejszej odległości
-    int min = 999; // zmienna przechowująca minimalną odległość
-    int min_index = -1; // zmienna przechowująca indeks minimalnego wierzchołka
-    for (int i = 0; i < V; i++) { // pętla po wierzchołkach
-        if (!visited[i] && dist[i] < min) { // jeśli wierzchołek jest nieodwiedzony i ma mniejszą odległość niż dotychczasowa minimalna
-            min = dist[i]; // uaktualnienie minimalnej odległości
-            min_index = i; // uaktualnienie indeksu minimalnego wierzchołka
-            
-        }
-        
-    }
-    return min_index; // zwrócenie indeksu minimalnego wierzchołka lub -1, jeśli nie ma takiego
-    
-}
-void dijkstra(graph* g, int s, int e) { // funkcja znajdująca najkrótszą ścieżkę w grafie za pomocą algorytmu Dijkstry
-    dist[s] = 0; // ustawienie odległości wierzchołka startowego na 0
-    int u = find_min(g->V); // znalezienie nieodwiedzonego wierzchołka o najmniejszej odległości
-    while (u != -1) { // pętla dopóki taki wierzchołek istnieje
-        visited[u] = 1; // oznaczenie wierzchołka jako odwiedzonego
-        if (u == e) { // jeśli wierzchołek jest końcowy
-            break; // przerwanie pętli
-            
-        }
-        node* curr = g->adj[u]; // ustawienie wskaźnika na głowę listy sąsiedztwa u
-        while (curr != NULL) { // pętla po liście sąsiedztwa u
-            int v = curr->x * g->V + curr->y; // obliczenie indeksu wierzchołka sąsiadującego z u
-            if (!visited[v] && dist[u] + 1 < dist[v]) { // jeśli wierzchołek jest nieodwiedzony i ma większą odległość niż u plus 1
-                dist[v] = dist[u] + 1; // uaktualnienie odległości wierzchołka v
-                prev[v] = u; // ustawienie poprzednika wierzchołka v na u
-                
-            }
-            curr = curr->next; // przejście do następnego węzła w liście
-            
-        }
-        u = find_min(g->V); // znalezienie kolejnego nieodwiedzonego wierzchołka o najmniejszej odległości
-        
-    }
-    
-} // zakończ funkcję
+// --- Graph Data Structures for Solver ---
 
-void mark_path(char** maze, int width, int height, int s, int e) { // funkcja zaznaczająca najkrótszą ścieżkę w labiryncie za pomocą znaku MARK
-    int u = e; // ustawienie aktualnego wierzchołka na końcowy
-    while (u != s) { // pętla dopóki aktualny wierzchołek nie jest startowy
-        int x = u / width; // obliczenie współrzędnej x komórki odpowiadającej wierzchołkowi
-        int y = u % width; // obliczenie współrzędnej y komórki odpowiadającej wierzchołkowi
-        if (maze[x][y] != START && maze[x][y] != END) { // jeśli komórka nie jest startem ani końcem
-            maze[x][y] = MARK; // zastąp znak komórki znakiem MARK
-            
-        }
-        u = prev[u]; // przejdź do poprzednika wierzchołka na najkrótszej ścieżce
-        
-    }
-    
-}
-int main(){ // główna funkcja programu
-    srand(time(NULL)); // ustawienie ziarna generatora liczb losowych
-    int width,height; // zmienne przechowujące szerokość i wysokość labiryntu
-    printf("Podaj liczbę kolumn labiryntu: "); // wyświetlenie komunikatu
-    scanf("%d",&width); // wczytanie szerokości od użytkownika
-    printf("Podaj liczbę wierszy labiryntu: "); // wyświetlenie komunikatu
-    scanf("%d",&height); // wczytanie wysokości od użytkownika
-   
-  // Sprawdź, czy szerokość i wysokość są liczbami całkowitymi dodatnimi
-  char width_str[10], height_str[10];
-  sprintf(width_str, "%d", width); // Konwertuj szerokość na ciąg znaków
-  sprintf(height_str, "%d", height); // Konwertuj wysokość na ciąg znaków
-  for (int i = 0; i < strlen(width_str); i++) { // Sprawdź każdy znak w ciągu szerokości
-    if (width_str[i] < '0' || width_str[i] > '9') { // Jeśli znak nie jest cyfrą
-      printf("Wymiary labiryntu muszą być liczbami całkowitymi dodatnimi.\n");
-      return 0;
-    }
-  }
-  for (int i = 0; i < strlen(height_str); i++) { // Sprawdź każdy znak w ciągu wysokości
-    if (height_str[i] < '0' || height_str[i] > '9') { // Jeśli znak nie jest cyfrą
-      printf("Wymiary labiryntu muszą być liczbami całkowitymi dodatnimi.\n");
-      return 0;
-    }
-  }
-  // Jeśli szerokość lub wysokość nie są liczbami całkowitymi dodatnimi, zwróć 0
-  if (width <= 0 || height <= 0) {
-    printf("Wymiary labiryntu muszą być liczbami całkowitymi dodatnimi.\n");
-    return 0;
-  }
-  // Jeśli szerokość lub wysokość są liczbami parzystymi, zwróć 0
-  if (width % 2 == 0 || height % 2 == 0) {
-    printf("Wymiary labiryntu muszą być liczbami nieparzystymi.\n");
-    return 0;
-  }
-  // Jeśli szerokość lub wysokość są mniejsze niż 3, zwróć 0
-  if (width < 3 || height < 3) {
-    printf("Wymiary labiryntu muszą być większe lub równe 3.\n");
-    return 0;
-  }
-  // Jeśli szerokość lub wysokość są większe niż 99, zwróć 0
-  if (width > 99 || height > 99) {
-    printf("Wymiary labiryntu muszą być mniejsze lub równe 99.\n");
-    return 0;
-  }
-  
+// Node for the adjacency list
+typedef struct Node {
+    int vertex;
+    struct Node* next;
+} Node;
 
-    char**maze=malloc(height*sizeof(char*)); // alokacja pamięci dla tablicy labiryntu
-    for(int y=0;y<height;y++){ // pętla po wierszach labiryntu
-        maze[y]=malloc(width*sizeof(char)); // alokacja pamięci dla wiersza labiryntu
-        for(int x=0;x<width;x++){ // pętla po kolumnach labiryntu
-            maze[y][x]=WALL; // ustawienie znaku komórki na WALL
-            
-        }
-        
+// Graph structure
+typedef struct {
+    int num_vertices;
+    Node** adj_lists;
+} Graph;
+
+// --- Queue Data Structures for BFS ---
+
+// Node for the queue
+typedef struct QNode {
+    int key;
+    struct QNode* next;
+} QNode;
+
+// Queue structure
+typedef struct {
+    QNode *front, *rear;
+} Queue;
+
+
+// --- Function Prototypes ---
+
+// Maze functions
+Maze* create_maze(int width, int height);
+void free_maze(Maze* maze);
+void generate_maze_recursive(Maze* maze, Point p);
+void print_maze(const Maze* maze);
+int is_valid(int x, int y, int width, int height);
+
+// Graph functions
+Graph* create_graph(int num_vertices);
+void free_graph(Graph* graph);
+void add_edge(Graph* graph, int src, int dest);
+Graph* maze_to_graph(const Maze* maze);
+
+// Solver (BFS) functions
+int solve_with_bfs(Graph* graph, int start_node, int end_node, int** prev_path);
+void reconstruct_and_mark_path(Maze* maze, int start_node, int* prev_path);
+
+// Queue utility functions
+Queue* create_queue();
+void enqueue(Queue* q, int key);
+int dequeue(Queue* q);
+int is_empty(Queue* q);
+
+
+// --- Main Application Logic ---
+
+int main() {
+    srand(time(NULL));
+
+    int width, height;
+    printf("Enter the width of the maze (odd, >= 5): ");
+    if (scanf("%d", &width) != 1) {
+        printf("Invalid input.\n");
+        return EXIT_FAILURE;
     }
-    start.x=rand()%(width/2)*2+1; // losowanie współrzędnej x punktu startowego
-    start.y=0; // ustawienie współrzędnej y punktu startowego na 0
-    end.x=rand()%(width/2)*2+1; // losowanie współrzędnej x punktu końcowego
-    end.y=height-1; // ustawienie współrzędnej y punktu końcowego na ostatni wiersz
-    generate_maze(maze,start,width,height); // generowanie labiryntu za pomocą algorytmu DFS
-    maze[start.y][start.x]=START; // ustawienie znaku komórki startowej na START
-    maze[end.y][end.x]=END; // ustawienie znaku komórki końcowej na END
-    printf("Oto wygenerowany labirynt:\n"); // wyświetlenie komunikatu
-    print_maze(maze,width,height); // wyświetlenie labiryntu na ekranie
-    graph* g = generate_graph(maze, width, height); // tworzenie grafu na podstawie labiryntu
-    init_arrays(width * height); // inicjalizacja tablic pomocniczych
-    int s = start.y * width + start.x; // obliczenie indeksu wierzchołka startowego
-    int e = end.y * width + end.x; // obliczenie indeksu wierzchołka końcowego
-    dijkstra(g, s, e); // znajdowanie najkrótszej ścieżki w grafie za pomocą algorytmu Dijkstry
-    if (dist[e] != 999) { // jeśli istnieje rozwiązanie
-        printf("\nLabirynt ma rozwiązanie.\n\n"); // wyświetlenie komunikatu
-        printf("Najkrótsza ścieżka ma długość %d.\n\n", dist[e]+1); // wyświetlenie długości najkrótszej ścieżki
-        mark_path(maze, width, height, s,e); // zaznaczenie najkrótszej ścieżki w labiryncie
-        printf("Oto labirynt z zaznaczoną najkrótszą ścieżką:\n"); // wyświetlenie komunikatu
-        print_maze(maze, width, height); // wyświetlenie labiryntu z zaznaczoną ścieżką
-        
+
+    printf("Enter the height of the maze (odd, >= 5): ");
+    if (scanf("%d", &height) != 1) {
+        printf("Invalid input.\n");
+        return EXIT_FAILURE;
     }
-    else { // jeśli nie istnieje rozwiązanie
-        printf("\nLabirynt nie ma rozwiązania.\n"); // wyświetlenie komunikatu
-        
+
+    if (width < 5 || height < 5 || width % 2 == 0 || height % 2 == 0) {
+        printf("Error: Dimensions must be odd integers greater than or equal to 5.\n");
+        return EXIT_FAILURE;
     }
-    free_maze(maze,height); // zwolnienie pamięci labiryntu
-    free(visited); // zwolnienie pamięci tablicy visited
-    free(dist); // zwolnienie pamięci tablicy dist
-    free(prev); // zwolnienie pamięci tablicy prev
-    free(g->adj); // zwolnienie pamięci tablicy list sąsiedztwa
-    free(g); // zwolnienie pamięci grafu
-    return 0; // zakończenie programu
+
+    Maze* maze = create_maze(width, height);
+    if (!maze) {
+        perror("Failed to create maze");
+        return EXIT_FAILURE;
+    }
     
-} // zakończenie funkcji
+    // The generation algorithm starts carving from an internal point.
+    Point generation_start = {1, 1};
+    generate_maze_recursive(maze, generation_start);
+
+    // Now, define Start and End points on the top and bottom edges.
+    // We use rand() % (width / 2) * 2 + 1 to ensure X is an odd number.
+    int start_x = rand() % (maze->width / 2) * 2 + 1;
+    int end_x = rand() % (maze->width / 2) * 2 + 1;
+
+    maze->start = (Point){start_x, 0}; // Top edge
+    maze->end = (Point){end_x, maze->height - 1}; // Bottom edge
+
+    // "Punch holes" in the outer walls for the Start and End points.
+    maze->grid[maze->start.y][maze->start.x] = START_CHAR;
+    maze->grid[maze->end.y][maze->end.x] = END_CHAR;
+    
+    printf("\nGenerated Maze:\n");
+    print_maze(maze);
+
+    Graph* graph = maze_to_graph(maze);
+    int start_node = maze->start.y * maze->width + maze->start.x;
+    int end_node = maze->end.y * maze->width + maze->end.x;
+
+    int* prev_path = NULL;
+    if (solve_with_bfs(graph, start_node, end_node, &prev_path)) {
+        printf("\nPath found! Reconstructing path...\n");
+        reconstruct_and_mark_path(maze, start_node, prev_path);
+        printf("\nMaze with Solution Path:\n");
+        print_maze(maze);
+    } else {
+        printf("\nNo path found from start to end.\n");
+    }
+
+    // Cleanup
+    free(prev_path);
+    free_graph(graph);
+    free_maze(maze);
+
+    return EXIT_SUCCESS;
+}
+
+
+// --- Function Implementations ---
+
+// Allocates memory for a new maze structure
+Maze* create_maze(int width, int height) {
+    Maze* maze = malloc(sizeof(Maze));
+    if (!maze) return NULL;
+
+    maze->width = width;
+    maze->height = height;
+    maze->grid = malloc(height * sizeof(char*));
+    if (!maze->grid) {
+        free(maze);
+        return NULL;
+    }
+
+    for (int i = 0; i < height; ++i) {
+        maze->grid[i] = malloc(width * sizeof(char));
+        if (!maze->grid[i]) {
+            // Cleanup previously allocated rows
+            for (int j = 0; j < i; ++j) free(maze->grid[j]);
+            free(maze->grid);
+            free(maze);
+            return NULL;
+        }
+        memset(maze->grid[i], WALL_CHAR, width);
+    }
+    return maze;
+}
+
+// Frees all memory associated with the maze
+void free_maze(Maze* maze) {
+    if (!maze) return;
+    for (int i = 0; i < maze->height; ++i) {
+        free(maze->grid[i]);
+    }
+    free(maze->grid);
+    free(maze);
+}
+
+// Generates the maze using a randomized recursive backtracker algorithm
+void generate_maze_recursive(Maze* maze, Point p) {
+    maze->grid[p.y][p.x] = PATH_CHAR;
+
+    int directions[] = {0, 1, 2, 3}; // N, S, E, W
+    for (int i = 0; i < 4; ++i) {
+        int r = rand() % 4;
+        int temp = directions[i];
+        directions[i] = directions[r];
+        directions[r] = temp;
+    }
+
+    int dx[] = {0, 0, 2, -2}; // Move two steps at a time
+    int dy[] = {-2, 2, 0, 0};
+
+    for (int i = 0; i < 4; ++i) {
+        int nx = p.x + dx[directions[i]];
+        int ny = p.y + dy[directions[i]];
+
+        if (is_valid(nx, ny, maze->width, maze->height) && maze->grid[ny][nx] == WALL_CHAR) {
+            // Carve path between current and next cell
+            maze->grid[ny - dy[directions[i]] / 2][nx - dx[directions[i]] / 2] = PATH_CHAR;
+            generate_maze_recursive(maze, (Point){nx, ny});
+        }
+    }
+}
+
+
+// Prints the maze grid to the console
+void print_maze(const Maze* maze) {
+    for (int y = 0; y < maze->height; ++y) {
+        for (int x = 0; x < maze->width; ++x) {
+            printf("%c ", maze->grid[y][x]);
+        }
+        printf("\n");
+    }
+}
+
+// Checks if a point is within the maze boundaries
+int is_valid(int x, int y, int width, int height) {
+    return x >= 0 && x < width && y >= 0 && y < height;
+}
+
+// Creates a graph with a given number of vertices
+Graph* create_graph(int num_vertices) {
+    Graph* graph = malloc(sizeof(Graph));
+    graph->num_vertices = num_vertices;
+    graph->adj_lists = malloc(num_vertices * sizeof(Node*));
+    for (int i = 0; i < num_vertices; i++) {
+        graph->adj_lists[i] = NULL;
+    }
+    return graph;
+}
+
+// Frees all memory associated with the graph
+void free_graph(Graph* graph) {
+    if (!graph) return;
+    for (int i = 0; i < graph->num_vertices; i++) {
+        Node* current = graph->adj_lists[i];
+        while (current) {
+            Node* temp = current;
+            current = current->next;
+            free(temp);
+        }
+    }
+    free(graph->adj_lists);
+    free(graph);
+}
+
+// Adds an edge to the graph (undirected, so add both ways)
+void add_edge(Graph* graph, int src, int dest) {
+    // Add edge from src to dest
+    Node* newNode = malloc(sizeof(Node));
+    newNode->vertex = dest;
+    newNode->next = graph->adj_lists[src];
+    graph->adj_lists[src] = newNode;
+
+    // Add edge from dest to src
+    newNode = malloc(sizeof(Node));
+    newNode->vertex = src;
+    newNode->next = graph->adj_lists[dest];
+    graph->adj_lists[dest] = newNode;
+}
+
+
+// Converts the maze grid into a graph representation
+Graph* maze_to_graph(const Maze* maze) {
+    int V = maze->width * maze->height;
+    Graph* graph = create_graph(V);
+
+    for (int y = 0; y < maze->height; ++y) {
+        for (int x = 0; x < maze->width; ++x) {
+            if (maze->grid[y][x] != WALL_CHAR) {
+                int u = y * maze->width + x;
+                
+                int dx[] = {0, 0, 1, -1};
+                int dy[] = {1, -1, 0, 0};
+
+                for(int i = 0; i < 4; ++i) {
+                    int nx = x + dx[i];
+                    int ny = y + dy[i];
+                    if (is_valid(nx, ny, maze->width, maze->height) && maze->grid[ny][nx] != WALL_CHAR) {
+                        int v = ny * maze->width + nx;
+                        // To avoid duplicate edges, only add if u < v
+                        if (u < v) {
+                           add_edge(graph, u, v);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return graph;
+}
+
+// Solves the maze using Breadth-First Search (BFS)
+int solve_with_bfs(Graph* graph, int start_node, int end_node, int** prev_path) {
+    int V = graph->num_vertices;
+    int* distance = malloc(V * sizeof(int));
+    *prev_path = malloc(V * sizeof(int));
+
+    for (int i = 0; i < V; ++i) {
+        distance[i] = INT_MAX;
+        (*prev_path)[i] = -1;
+    }
+
+    Queue* q = create_queue();
+    distance[start_node] = 0;
+    enqueue(q, start_node);
+
+    int path_found = 0;
+    while (!is_empty(q)) {
+        int u = dequeue(q);
+
+        if (u == end_node) {
+            path_found = 1;
+            break;
+        }
+
+        Node* temp = graph->adj_lists[u];
+        while (temp) {
+            int v = temp->vertex;
+            if (distance[v] == INT_MAX) {
+                distance[v] = distance[u] + 1;
+                (*prev_path)[v] = u;
+                enqueue(q, v);
+            }
+            temp = temp->next;
+        }
+    }
+    
+    free(distance);
+    free(q); // The queue itself is empty, just free the struct
+    return path_found;
+}
+
+// Reconstructs the path from the 'prev_path' array and marks the maze
+void reconstruct_and_mark_path(Maze* maze, int start_node, int* prev_path) {
+    int current = maze->end.y * maze->width + maze->end.x;
+    while (current != start_node && current != -1) {
+        int row = current / maze->width;
+        int col = current % maze->width;
+        if (maze->grid[row][col] != START_CHAR && maze->grid[row][col] != END_CHAR) {
+            maze->grid[row][col] = SOLUTION_CHAR;
+        }
+        current = prev_path[current];
+    }
+}
+
+
+// --- Queue Utility Function Implementations ---
+
+Queue* create_queue() {
+    Queue* q = malloc(sizeof(Queue));
+    q->front = q->rear = NULL;
+    return q;
+}
+
+void enqueue(Queue* q, int key) {
+    QNode* temp = malloc(sizeof(QNode));
+    temp->key = key;
+    temp->next = NULL;
+    if (q->rear == NULL) {
+        q->front = q->rear = temp;
+        return;
+    }
+    q->rear->next = temp;
+    q->rear = temp;
+}
+
+int dequeue(Queue* q) {
+    if (q->front == NULL) return -1;
+    QNode* temp = q->front;
+    int key = temp->key;
+    q->front = q->front->next;
+    if (q->front == NULL) {
+        q->rear = NULL;
+    }
+    free(temp);
+    return key;
+}
+
+int is_empty(Queue* q) {
+    return q->front == NULL;
+}
